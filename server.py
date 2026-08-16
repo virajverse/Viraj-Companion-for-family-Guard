@@ -559,6 +559,17 @@ def init_app() -> web.Application:
             return web.FileResponse(index_file)
         return web.Response(status=404, text="Studio index.html not found")
 
+    async def health_check_handler(request):
+        return web.json_response({
+            "status": "UP",
+            "service": "ultron-companion-server",
+            "version": "11.3.46",
+            "timestamp": int(time.time()),
+            "connected_phones": len(phone_sockets)
+        })
+
+    app.router.add_get("/health", health_check_handler)
+    app.router.add_get("/api/health", health_check_handler)
     app.router.add_get("/", serve_index)
 
     async def serve_apk(request):
