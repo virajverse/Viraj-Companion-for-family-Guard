@@ -1,0 +1,9 @@
+﻿# Ignore everything by default
+*
+
+# Whitelist ONLY server.py and cloud deployment essentials
+!server.py
+!requirements.txt
+!render.yaml
+!.gitignore
+!README.md

@@ -1,0 +1,13 @@
+﻿services:
+  - type: web
+    name: ultrino-companion-studio
+    runtime: python
+    region: singapore
+    plan: free
+    rootDir: companion_studio
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    envVars:
+      - key: PORT
+        value: 10000
+    healthCheckPath: /health
