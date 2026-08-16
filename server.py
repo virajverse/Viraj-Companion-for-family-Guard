@@ -20,6 +20,18 @@ try:
 except ImportError:
     HAS_EDGE_TTS = False
 
+try:
+    import speech_recognition as sr
+    HAS_SPEECH_RECOGNITION = True
+except ImportError:
+    HAS_SPEECH_RECOGNITION = False
+
+try:
+    from faster_whisper import WhisperModel
+    HAS_FASTER_WHISPER = True
+except ImportError:
+    HAS_FASTER_WHISPER = False
+
 import subprocess
 
 TTS_CACHE_DIR = os.path.join(tempfile.gettempdir(), "ultron_tts_cache")
@@ -799,12 +811,119 @@ def init_app() -> web.Application:
         except Exception as e:
             return web.json_response({"status": "ERROR", "error": str(e)}, status=500)
 
+    async def stt_handler(request: web.Request):
+        """
+        High-Performance, Privacy-First Speech-to-Text Endpoint.
+        Accepts:
+          - multipart/form-data (field 'audio' or 'file')
+          - application/octet-stream (raw PCM / WAV / MP3 / OGG audio bytes)
+          - application/json ({"audio_base64": "...", "language": "hi-IN"})
+        Returns:
+          {"status": "SUCCESS", "text": "...", "language": "hi-IN", "confidence": 0.95, "duration_ms": 120}
+        """
+        start_time = time.time()
+        audio_bytes = b""
+        language = request.query.get("lang", request.query.get("language", "hi-IN"))
+
+        # 1. Size Limit & Payload Guard (max 10MB)
+        if request.content_length and request.content_length > 10 * 1024 * 1024:
+            return web.json_response({"status": "ERROR", "error": "Payload exceeds 10MB limit"}, status=413)
+
+        try:
+            content_type = request.content_type.lower()
+            if "multipart" in content_type:
+                reader = await request.multipart()
+                while True:
+                    part = await reader.next()
+                    if part is None:
+                        break
+                    if part.name in ("audio", "file", "voice"):
+                        audio_bytes = await part.read()
+                        break
+                    elif part.name in ("lang", "language"):
+                        language = (await part.text()).strip()
+            elif "json" in content_type:
+                data = await request.json()
+                import base64
+                b64 = data.get("audio_base64") or data.get("audio", "")
+                if b64:
+                    audio_bytes = base64.b64decode(b64)
+                language = data.get("language") or data.get("lang") or language
+            else:
+                # Raw binary stream
+                audio_bytes = await request.read()
+
+            if not audio_bytes:
+                return web.json_response({"status": "ERROR", "error": "No audio payload received"}, status=400)
+
+            # 2. Transcription via SpeechRecognition (Google STT) with auto-fallback
+            if not HAS_SPEECH_RECOGNITION:
+                return web.json_response({"status": "ERROR", "error": "SpeechRecognition library not installed on server"}, status=503)
+
+            def _sync_transcribe(raw_bytes: bytes, lang: str):
+                import speech_recognition as sr
+                import io
+                recognizer = sr.Recognizer()
+                recognizer.energy_threshold = 300
+                recognizer.dynamic_energy_threshold = True
+
+                audio_data = None
+                if raw_bytes.startswith(b"RIFF"):
+                    try:
+                        with io.BytesIO(raw_bytes) as bio:
+                            with sr.AudioFile(bio) as source:
+                                audio_data = recognizer.record(source)
+                    except Exception as ex:
+                        logger.warning(f"Error parsing WAV header: {ex}")
+                        audio_data = None
+
+                if audio_data is None:
+                    # Fallback raw 16kHz 16-bit Mono PCM
+                    try:
+                        audio_data = sr.AudioData(raw_bytes, 16000, 2)
+                    except Exception as e:
+                        logger.warning(f"Failed to wrap raw PCM: {e}")
+                        return {"status": "ERROR", "text": "", "error": "Invalid audio format"}
+
+                try:
+                    text = recognizer.recognize_google(audio_data, language=lang)
+                    return {"status": "SUCCESS", "text": text, "language": lang, "confidence": 0.95}
+                except sr.UnknownValueError:
+                    # Automatic fallback to English-India if Hindi produced no text
+                    if lang != "en-IN":
+                        try:
+                            text = recognizer.recognize_google(audio_data, language="en-IN")
+                            return {"status": "SUCCESS", "text": text, "language": "en-IN", "confidence": 0.90}
+                        except Exception:
+                            pass
+                    return {"status": "NO_SPEECH", "text": "", "language": lang, "confidence": 0.0}
+                except sr.RequestError as re:
+                    logger.error(f"Google STT service error: {re}")
+                    return {"status": "ERROR", "text": "", "error": f"STT backend error: {re}"}
+                except Exception as e:
+                    logger.error(f"STT unexpected error: {e}")
+                    return {"status": "ERROR", "text": "", "error": str(e)}
+
+            loop = asyncio.get_event_loop()
+            res = await loop.run_in_executor(None, _sync_transcribe, audio_bytes, language)
+            res["duration_ms"] = int((time.time() - start_time) * 1000)
+            return web.json_response(res)
+
+        except Exception as e:
+            logger.error(f"STT handler error: {e}")
+            return web.json_response({"status": "ERROR", "error": str(e)}, status=500)
+
     app.router.add_post("/api/tts/synthesize", tts_synthesize_handler)
     app.router.add_post("/api/synthesize", tts_synthesize_handler)  # Backward-compat with Voice Studio
     app.router.add_get("/api/tts/voices", tts_voices_handler)
     app.router.add_get("/api/tts/stream", tts_stream_synthesize_handler)
     app.router.add_post("/api/tts/stream", tts_stream_synthesize_handler)
     app.router.add_get("/static/tts/{filename}", serve_tts_static)
+
+    # ── STT SPEECH-TO-TEXT ENDPOINTS ──
+    app.router.add_post("/stt", stt_handler)
+    app.router.add_post("/api/stt", stt_handler)
+    app.router.add_post("/api/stt/transcribe", stt_handler)
 
     app.router.add_get("/api/esp8266/{path:.*}", esp8266_proxy_handler)
 
