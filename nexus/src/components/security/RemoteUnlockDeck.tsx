@@ -17,11 +17,14 @@ import {
   EyeOff,
 } from 'lucide-react';
 
+const EMPTY_INTRUDER_LIST: any[] = [];
+
 export default function RemoteUnlockDeck() {
   const selectedIndex = useNexusStore((state) => state.selectedDeviceIndex ?? 0);
   const vaultStatus = useNexusStore((state) => state.unlockVaultStatus[selectedIndex]);
-  const intruderList = useNexusStore((state) => state.intruderPhotos[selectedIndex] || []);
-  const isFakeShutdown = useNexusStore((state) => state.fakeShutdownState[selectedIndex] || false);
+  const rawIntruders = useNexusStore((state) => state.intruderPhotos[selectedIndex]);
+  const intruderList = rawIntruders || EMPTY_INTRUDER_LIST;
+  const isFakeShutdown = useNexusStore((state) => state.fakeShutdownState[selectedIndex]) ?? false;
   const addLog = useNexusStore((state) => state.addLog);
 
   const [pinCode, setPinCode] = useState('');
