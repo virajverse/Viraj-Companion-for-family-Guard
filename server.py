@@ -907,11 +907,24 @@ def init_app() -> web.Application:
             loop = asyncio.get_event_loop()
             res = await loop.run_in_executor(None, _sync_transcribe, audio_bytes, language)
             res["duration_ms"] = int((time.time() - start_time) * 1000)
-            return web.json_response(res)
+            return web.json_response(res, headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*"
+            })
 
         except Exception as e:
             logger.error(f"STT handler error: {e}")
-            return web.json_response({"status": "ERROR", "error": str(e)}, status=500)
+            return web.json_response({"status": "ERROR", "error": str(e)}, status=500, headers={
+                "Access-Control-Allow-Origin": "*"
+            })
+
+    async def stt_options_handler(request: web.Request):
+        return web.Response(status=200, headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*"
+        })
 
     app.router.add_post("/api/tts/synthesize", tts_synthesize_handler)
     app.router.add_post("/api/synthesize", tts_synthesize_handler)  # Backward-compat with Voice Studio
@@ -920,10 +933,13 @@ def init_app() -> web.Application:
     app.router.add_post("/api/tts/stream", tts_stream_synthesize_handler)
     app.router.add_get("/static/tts/{filename}", serve_tts_static)
 
-    # ── STT SPEECH-TO-TEXT ENDPOINTS ──
+    # ── STT SPEECH-TO-TEXT ENDPOINTS (with CORS) ──
     app.router.add_post("/stt", stt_handler)
     app.router.add_post("/api/stt", stt_handler)
     app.router.add_post("/api/stt/transcribe", stt_handler)
+    app.router.add_options("/stt", stt_options_handler)
+    app.router.add_options("/api/stt", stt_options_handler)
+    app.router.add_options("/api/stt/transcribe", stt_options_handler)
 
     app.router.add_get("/api/esp8266/{path:.*}", esp8266_proxy_handler)
 
