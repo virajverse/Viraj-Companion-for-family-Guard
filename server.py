@@ -823,7 +823,7 @@ def init_app() -> web.Application:
         """
         start_time = time.time()
         audio_bytes = b""
-        language = request.query.get("lang", request.query.get("language", "hi-IN"))
+        language = request.query.get("lang", request.query.get("language", "en-IN"))
 
         # 1. Size Limit & Payload Guard (max 10MB)
         if request.content_length and request.content_length > 10 * 1024 * 1024:
@@ -889,13 +889,13 @@ def init_app() -> web.Application:
                     text = recognizer.recognize_google(audio_data, language=lang)
                     return {"status": "SUCCESS", "text": text, "language": lang, "confidence": 0.95}
                 except sr.UnknownValueError:
-                    # Automatic fallback to English-India if Hindi produced no text
-                    if lang != "en-IN":
-                        try:
-                            text = recognizer.recognize_google(audio_data, language="en-IN")
-                            return {"status": "SUCCESS", "text": text, "language": "en-IN", "confidence": 0.90}
-                        except Exception:
-                            pass
+                    # Bidirectional fallback between en-IN and hi-IN
+                    fallback_lang = "hi-IN" if lang.startswith("en") else "en-IN"
+                    try:
+                        text = recognizer.recognize_google(audio_data, language=fallback_lang)
+                        return {"status": "SUCCESS", "text": text, "language": fallback_lang, "confidence": 0.90}
+                    except Exception:
+                        pass
                     return {"status": "NO_SPEECH", "text": "", "language": lang, "confidence": 0.0}
                 except sr.RequestError as re:
                     logger.error(f"Google STT service error: {re}")
