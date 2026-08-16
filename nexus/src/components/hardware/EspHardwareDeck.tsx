@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useNexusStore } from '@/lib/deviceStore';
+import { nexusWs } from '@/lib/websocket';
 import { Cpu, Power, Activity, Wifi, Zap } from 'lucide-react';
 
 export default function EspHardwareDeck() {
@@ -12,7 +13,21 @@ export default function EspHardwareDeck() {
   const toggleRelay = () => {
     const nextState = !isRelayOn;
     setIsRelayOn(nextState);
-    addLog('ARDUINO', `⚡ Relay toggled → ${nextState ? 'HIGH (ON)' : 'LOW (OFF)'}`);
+    nexusWs.sendDirectApi('ESP_RELAY_TOGGLE', { node_ip: nodeIp, state: nextState });
+    addLog('ARDUINO', `⚡ Relay state dispatched → ${nextState ? 'HIGH (ON)' : 'LOW (OFF)'} to ${nodeIp}`);
+
+    // Try direct LAN fetch if running on same subnet
+    try {
+      fetch(`http://${nodeIp}/relay?state=${nextState ? 1 : 0}`, { mode: 'no-cors' }).catch(() => {});
+    } catch (_) {}
+  };
+
+  const pingNode = () => {
+    nexusWs.sendDirectApi('ESP_PING', { node_ip: nodeIp });
+    addLog('ARDUINO', `📡 Ping request sent to ${nodeIp}`);
+    try {
+      fetch(`http://${nodeIp}/ping`, { mode: 'no-cors' }).catch(() => {});
+    } catch (_) {}
   };
 
   return (
@@ -43,7 +58,7 @@ export default function EspHardwareDeck() {
               className="flex-1 px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono text-white focus:outline-none"
             />
             <button
-              onClick={() => addLog('ARDUINO', `Ping request sent to ${nodeIp}`)}
+              onClick={pingNode}
               className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-slate-200"
             >
               Ping
