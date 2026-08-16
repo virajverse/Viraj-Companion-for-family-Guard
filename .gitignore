@@ -1,16 +1,17 @@
-# Ignore everything by default
-*
+# Python & Caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+static/tts/*.mp3
 
-# Whitelist server, UI, scripts, and production APKs for Render deployment
-!server.py
-!requirements.txt
-!render.yaml
-!.gitignore
-!README.md
-!BrainCompanion.apk
-!apk/
-!apk/version_info.json
-!apk/latest/
-!apk/latest/BrainCompanion.apk
-!apk/latest/*
-
+# Nexus Next.js dependencies & builds (Strictly Ignored)
+node_modules/
+**/node_modules/**
+.next/
+**/.next/**
+out/
+**/out/**
+.env*.local
+.vercel/
