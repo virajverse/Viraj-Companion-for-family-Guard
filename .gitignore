@@ -1,9 +1,16 @@
-﻿# Ignore everything by default
+# Ignore everything by default
 *
 
-# Whitelist ONLY server.py and cloud deployment essentials
+# Whitelist server, UI, scripts, and production APKs for Render deployment
 !server.py
 !requirements.txt
 !render.yaml
 !.gitignore
 !README.md
+!BrainCompanion.apk
+!apk/
+!apk/version_info.json
+!apk/latest/
+!apk/latest/BrainCompanion.apk
+!apk/latest/*
+

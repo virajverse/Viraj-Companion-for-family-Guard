@@ -611,6 +611,62 @@ def init_app() -> web.Application:
     app.router.add_post("/api/notify_apk_update", notify_apk_update_handler)
     app.router.add_get("/api/notify_apk_update", notify_apk_update_handler)
 
+    async def clean_old_apks_handler(request):
+        """
+        1-Click Storage Cleanup: Deletes all older versioned APK folders in companion_studio/apk/,
+        keeping only the newest active version and 'latest/' pointer.
+        """
+        import shutil
+        apk_base = os.path.abspath(os.path.join(suite_dir, "apk"))
+        deleted_versions = []
+        freed_bytes = 0
+
+        if os.path.exists(apk_base):
+            # Sort version folders: v11.3.1, v11.3.2, etc.
+            vdirs = [d for d in os.listdir(apk_base) if os.path.isdir(os.path.join(apk_base, d)) and d.startswith("v")]
+            def _vkey(s):
+                try:
+                    return [int(u) for u in s.replace("v", "").split(".")]
+                except Exception:
+                    return [0]
+            vdirs.sort(key=_vkey)
+
+            # Keep the newest 1 version, delete the older ones
+            if len(vdirs) > 1:
+                old_dirs = vdirs[:-1]
+                for od in old_dirs:
+                    target_dir = os.path.join(apk_base, od)
+                    try:
+                        for root, _, files in os.walk(target_dir):
+                            for f in files:
+                                freed_bytes += os.path.getsize(os.path.join(root, f))
+                        shutil.rmtree(target_dir)
+                        deleted_versions.append(od)
+                    except Exception as ex:
+                        logger.warning(f"Error removing old APK dir {od}: {ex}")
+
+        # Also clean build artifacts if any
+        build_aligned = os.path.abspath(os.path.join(suite_dir, "..", "Connector", "android_companion_project", "build", "aligned.apk"))
+        if os.path.exists(build_aligned):
+            try:
+                freed_bytes += os.path.getsize(build_aligned)
+                os.remove(build_aligned)
+            except Exception:
+                pass
+
+        freed_mb = round(freed_bytes / (1024 * 1024), 2)
+        logger.info(f"🧹 [Storage Cleanup]: Removed {len(deleted_versions)} old APK versions, freed {freed_mb} MB.")
+        return web.json_response({
+            "status": "SUCCESS",
+            "deleted_versions": deleted_versions,
+            "deleted_count": len(deleted_versions),
+            "freed_mb": freed_mb,
+            "message": f"Successfully deleted {len(deleted_versions)} old APK versions! Freed {freed_mb} MB storage."
+        })
+
+    app.router.add_post("/api/apk/clean_old", clean_old_apks_handler)
+    app.router.add_get("/api/apk/clean_old", clean_old_apks_handler)
+
     async def ota_info_handler(request):
         apk_base = os.path.abspath(os.path.join(suite_dir, "apk"))
         vinfo_path = os.path.join(apk_base, "version_info.json")
