@@ -243,38 +243,60 @@ export default function TacticalRadarDeck() {
         const speedKmh = Math.round((p.speed || 0) * 3.6);
         const timeStr = p.timestamp ? new Date(p.timestamp).toLocaleTimeString() : (p.formattedTime || ('#' + (idx + 1)));
 
-        let badgeClass = 'custom-badge';
-        if (isShutdown) badgeClass += ' shutdown-badge';
-        else if (isStart) badgeClass += ' start-badge';
-        else if (isEnd) badgeClass += ' live-badge';
-
-        const labelText = isShutdown ? '!' : (isStart ? 'S' : (isEnd ? '★' : (idx + 1)));
-
-        const customIcon = L.divIcon({
-          className: 'wrap',
-          html: '<div class="' + badgeClass + '">' + labelText + '</div>',
-          iconSize: [22, 22],
-          iconAnchor: [11, 11]
-        });
-
-        const marker = L.marker(latlng, { icon: customIcon }).addTo(map);
-        marker.bindPopup(
+        const popupContent = 
           '<div style="font-size: 11px; padding: 2px;">' +
-          '<b style="color: #38bdf8;">' + (isShutdown ? '🚨 THEFT SHUTDOWN' : (isStart ? '🏁 START POINT' : (isEnd ? '📍 CURRENT POSITION' : '📌 POINT #' + (idx + 1)))) + '</b><br/>' +
+          '<b style="color: #38bdf8;">' + (isShutdown ? '🚨 THEFT SHUTDOWN' : (isStart ? '🏁 START POINT' : (isEnd ? '📍 CURRENT POSITION' : '📌 CHECKPOINT #' + (idx + 1)))) + '</b><br/>' +
           '⏰ Time: <b>' + timeStr + '</b><br/>' +
           '🏎️ Speed: <b style="color: #4ade80;">' + speedKmh + ' km/h</b><br/>' +
           '⚡ Reason: <span style="color: #a5f3fc;">' + (p.trigger_reason || 'Travel Point') + '</span><br/>' +
           '📍 Coords: ' + p.latitude.toFixed(5) + ', ' + p.longitude.toFixed(5) +
-          '</div>'
-        );
+          '</div>';
+
+        // Only Start, End (Live), and Shutdown events get large prominent badges
+        if (isStart || isEnd || isShutdown) {
+          let badgeClass = 'custom-badge';
+          if (isShutdown) badgeClass += ' shutdown-badge';
+          else if (isStart) badgeClass += ' start-badge';
+          else if (isEnd) badgeClass += ' live-badge';
+
+          const labelText = isShutdown ? '!' : (isStart ? 'S' : '★');
+
+          const customIcon = L.divIcon({
+            className: 'wrap',
+            html: '<div class="' + badgeClass + '">' + labelText + '</div>',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+          });
+
+          L.marker(latlng, { icon: customIcon, zIndexOffset: 1000 }).addTo(map).bindPopup(popupContent);
+        } else {
+          // Intermediate checkpoints: sleek unobtrusive micro-dots
+          const dot = L.circleMarker(latlng, {
+            radius: 3.5,
+            color: '#38bdf8',
+            fillColor: '#06b6d4',
+            fillOpacity: 0.8,
+            weight: 1
+          }).addTo(map);
+          dot.bindPopup(popupContent);
+        }
       });
 
       if (latlngs.length > 1) {
-        const polyline = L.polyline(latlngs, {
+        // Outer neon glow stroke
+        L.polyline(latlngs, {
           color: '#06b6d4',
-          weight: 4,
-          opacity: 0.9,
-          dashArray: '6, 6',
+          weight: 7,
+          opacity: 0.25,
+          lineJoin: 'round'
+        }).addTo(map);
+
+        // Crisp inner route polyline
+        const polyline = L.polyline(latlngs, {
+          color: '#38bdf8',
+          weight: 3.5,
+          opacity: 0.95,
+          dashArray: '6, 5',
           lineJoin: 'round'
         }).addTo(map);
 
