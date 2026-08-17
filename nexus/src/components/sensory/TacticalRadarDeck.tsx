@@ -189,10 +189,44 @@ export default function TacticalRadarDeck() {
     addLog('TACTICAL', `🗺️ Rendering full multi-point route on in-app satellite map (${gpsHistory.length} checkpoints)`);
   };
 
+  const handleClearTrail = () => {
+    nexusWs.sendDirectApi('CLEAR_LOCATION_TRAJECTORY', {}, selectedIndex);
+    useNexusStore.setState((state) => ({
+      gpsHistory: {
+        ...state.gpsHistory,
+        [selectedIndex]: [],
+      },
+    }));
+    addLog('TACTICAL', `🧹 Trajectory history wiped clean for Device #${selectedIndex + 1}`);
+  };
+
   const generateLeafletMapHtml = (history: any[], currentLat: number, currentLon: number, accuracyM: number, focusedPt: any | null) => {
-    const pointsJson = JSON.stringify(history || []);
     const focusLat = focusedPt ? focusedPt.latitude : currentLat;
     const focusLon = focusedPt ? focusedPt.longitude : currentLon;
+
+    // Filter out stationary room jitter noise (points < 35m apart at 0 speed)
+    const cleanHistory: any[] = [];
+    if (history && history.length > 0) {
+      let lastKept: any = null;
+      history.forEach((p: any, idx: number) => {
+        if (!p.latitude || !p.longitude) return;
+        const isCritical = idx === 0 || idx === history.length - 1 || p.isShutdown || (p.speed && p.speed > 0.6);
+        if (isCritical || !lastKept) {
+          cleanHistory.push(p);
+          lastKept = p;
+        } else {
+          const dLat = (p.latitude - lastKept.latitude) * 111320;
+          const dLon = (p.longitude - lastKept.longitude) * 111320 * Math.cos(p.latitude * Math.PI / 180);
+          const distM = Math.sqrt(dLat * dLat + dLon * dLon);
+          if (distM >= 35) { // Only keep if moved >= 35 meters
+            cleanHistory.push(p);
+            lastKept = p;
+          }
+        }
+      });
+    }
+
+    const pointsJson = JSON.stringify(cleanHistory);
 
     return `<!DOCTYPE html>
 <html>
@@ -427,15 +461,27 @@ export default function TacticalRadarDeck() {
                 />
               </div>
 
-              {filteredHistory.length > 0 && (
-                <button
-                  onClick={handleOpenFullRouteMap}
-                  className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border border-emerald-400/40 text-[10px] font-extrabold text-white transition-all shadow-md active:scale-95"
-                  title="View complete multi-point route on in-app satellite map"
-                >
-                  🗺️ Open Full Route
-                </button>
-              )}
+              <div className="flex items-center gap-1.5">
+                {filteredHistory.length > 0 && (
+                  <button
+                    onClick={handleOpenFullRouteMap}
+                    className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border border-emerald-400/40 text-[10px] font-extrabold text-white transition-all shadow-md active:scale-95"
+                    title="View complete multi-point route on in-app satellite map"
+                  >
+                    🗺️ Open Full Route
+                  </button>
+                )}
+
+                {gpsHistory.length > 0 && (
+                  <button
+                    onClick={handleClearTrail}
+                    className="px-2 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/40 text-[10px] font-bold text-rose-300 transition-all active:scale-95"
+                    title="Clear old noisy GPS test points"
+                  >
+                    🧹 Clear Trail
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Checkpoints Count & Dynamic Geodesic Threshold Selector */}
