@@ -157,9 +157,12 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
     };
   }, [deviceIndex]);
 
-  // Keep-alive heartbeat: continuously guarantees phone stream is ACTIVE (18-20 FPS)
+  // Keep-alive heartbeat: ONLY active when user explicitly engages live stream mode
   useEffect(() => {
-    nexusWs.sendDirectApi('START_STREAM', {}, deviceIndex);
+    if (activeVisionMode !== 'SCREEN_VIEW' && activeVisionMode !== 'SCREEN_TOUCH') {
+      return;
+    }
+
     nexusWs.sendDirectApi('STREAM_MODE', { stream_mode: 'ACTIVE' }, deviceIndex);
 
     const heartbeat = setInterval(() => {
@@ -169,7 +172,7 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
     return () => {
       clearInterval(heartbeat);
     };
-  }, [deviceIndex]);
+  }, [deviceIndex, activeVisionMode]);
 
   const isAudioStreaming = useNexusStore((state) => state.isAudioStreaming);
 

@@ -106,8 +106,8 @@ export const useNexusStore = create<NexusState>((set, get) => ({
   fakeShutdownState: {},
   unlockVaultStatus: {},
 
-  activeVisionMode: 'SCREEN_TOUCH',
-  isAudioStreaming: true,
+  activeVisionMode: 'STOP',
+  isAudioStreaming: false,
   masterVolume: 0.8,
   manualRotationDeg: 0,
   isFillMode: false,
