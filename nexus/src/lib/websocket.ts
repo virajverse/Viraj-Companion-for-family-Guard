@@ -108,14 +108,14 @@ class NexusWebSocketClient {
     }
 
     const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-    const ticketParam = urlParams?.get('ticket') || '';
-    const authParam = urlParams?.get('auth') || '';
+    const ticketParam = urlParams?.get('ticket') || (typeof window !== 'undefined' ? localStorage.getItem('ultron_ticket') || '' : '');
+    const authParam = urlParams?.get('auth') || (typeof window !== 'undefined' ? localStorage.getItem('ultron_auth') || 'virajverse_sovereign_secret' : 'virajverse_sovereign_secret');
 
     let targetUrl = baseUrl.includes('?') ? `${baseUrl}&client=ULTRON_NEXUS` : `${baseUrl}?client=ULTRON_NEXUS`;
     if (ticketParam) targetUrl += `&ticket=${encodeURIComponent(ticketParam)}`;
     if (authParam) targetUrl += `&auth=${encodeURIComponent(authParam)}`;
 
-    useNexusStore.getState().addLog('NETWORK', `⚡ Connecting Studio to ${label} (${targetUrl})...`);
+    useNexusStore.getState().addLog('NETWORK', `⚡ Connecting Studio to ${label}...`);
 
     try {
       this.ws = new WebSocket(targetUrl);
@@ -126,6 +126,13 @@ class NexusWebSocketClient {
         useNexusStore.getState().setWsConnected(true, targetUrl);
         useNexusStore.getState().addLog('NETWORK', `⚡ Connected successfully to ${targetUrl}`);
         
+        // Immediate Sovereign Authentication Challenge
+        this.sendPacket({
+          type: 'AUTHENTICATE_STUDIO',
+          secret: authParam || 'virajverse_sovereign_secret',
+          ticket: ticketParam,
+        });
+
         // Request fresh device metadata without auto-forcing high-bandwidth streams
         this.sendPacket({
           type: 'DIRECT_API',
