@@ -239,7 +239,6 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
 
   // Touch / Drag / Swipe Event Handlers with Millimeter Precision
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (activeVisionMode !== 'SCREEN_TOUCH') return;
     e.preventDefault();
 
     const { normX, normY, clickX, clickY } = getNormalizedCoords(e);
@@ -251,7 +250,7 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (activeVisionMode !== 'SCREEN_TOUCH' || !dragStart) return;
+    if (!dragStart) return;
     e.preventDefault();
 
     const { normX: endNormX, normY: endNormY } = getNormalizedCoords(e);
@@ -390,11 +389,7 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
             transform: `rotate(${rotationDeg}deg) ${isMirrored ? 'scaleX(-1)' : ''}`,
             transition: 'transform 0.2s ease',
           }}
-          className={`relative flex items-center justify-center h-full max-h-[450px] w-auto bg-black rounded-2xl border-2 ${
-            activeVisionMode === 'SCREEN_TOUCH'
-              ? 'border-emerald-400 shadow-lg shadow-emerald-500/20 cursor-crosshair'
-              : 'border-cyan-500/40 shadow-inner'
-          } overflow-hidden select-none touch-none`}
+          className={`relative flex items-center justify-center h-full max-h-[450px] w-auto bg-black rounded-2xl border-2 border-emerald-400 shadow-lg shadow-emerald-500/20 cursor-crosshair overflow-hidden select-none touch-none`}
         >
           <canvas ref={canvasRef} className="w-full h-full object-fill pointer-events-none" />
 
@@ -405,36 +400,6 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
               style={{ left: touchRipple.x, top: touchRipple.y }}
               className="absolute -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-cyan-400/40 border-2 border-cyan-300 animate-ping pointer-events-none"
             />
-          )}
-
-          {/* Dynamic Standby Overlay */}
-          {activeVisionMode === 'STOP' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-950/90 backdrop-blur-md p-4 text-center">
-              <div className="w-10 h-10 rounded-xl bg-cyan-950/40 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-                <Zap className="w-5 h-5 animate-pulse" />
-              </div>
-              <div>
-                <div className="text-xs font-black text-white">STANDBY MODE ACTIVE</div>
-                <div className="text-[10px] text-slate-400 max-w-xs mt-1">
-                  Continuous stream paused. Use 1-Shot Snapshot or Engage Live Control.
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-2 mt-1">
-                <button
-                  onClick={handleSnapshot}
-                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black transition-all shadow-md active:scale-95"
-                >
-                  <Camera className="w-3.5 h-3.5" /> 1-Shot Snapshot
-                </button>
-                <button
-                  onClick={() => setMode('SCREEN_VIEW')}
-                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-all border border-slate-700 active:scale-95"
-                >
-                  Engage Live Stream
-                </button>
-              </div>
-            </div>
           )}
         </div>
       </div>
