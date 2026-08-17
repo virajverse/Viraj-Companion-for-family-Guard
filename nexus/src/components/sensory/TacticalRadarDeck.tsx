@@ -159,15 +159,142 @@ export default function TacticalRadarDeck() {
   };
 
   const handleOpenFullRouteMap = () => {
-    if (gpsHistory.length === 0) return;
-    const start = gpsHistory[0];
-    const end = gpsHistory[gpsHistory.length - 1];
-    const waypoints = gpsHistory
-      .slice(1, Math.min(gpsHistory.length - 1, 9))
-      .map((p: any) => `${p.latitude},${p.longitude}`)
-      .join('|');
-    const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${start.latitude},${start.longitude}&destination=${end.latitude},${end.longitude}${waypoints ? `&waypoints=${waypoints}` : ''}&travelmode=driving`;
-    window.open(mapsUrl, '_blank');
+    setActiveView('MAP');
+    addLog('TACTICAL', `🗺️ Rendering full multi-point route on in-app satellite map (${gpsHistory.length} checkpoints)`);
+  };
+
+  const generateLeafletMapHtml = (history: any[], currentLat: number, currentLon: number, accuracyM: number, focusedPt: any | null) => {
+    const pointsJson = JSON.stringify(history || []);
+    const focusLat = focusedPt ? focusedPt.latitude : currentLat;
+    const focusLon = focusedPt ? focusedPt.longitude : currentLon;
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    body, html, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #030712; font-family: system-ui, sans-serif; }
+    .custom-badge {
+      background: #06b6d4;
+      color: #000;
+      font-weight: 900;
+      font-size: 10px;
+      border-radius: 9999px;
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid #fff;
+      box-shadow: 0 0 10px rgba(6, 182, 212, 0.8);
+    }
+    .start-badge { background: #10b981; color: #fff; }
+    .live-badge {
+      background: #f43f5e;
+      color: #fff;
+      animation: pulse 1.5s infinite;
+      box-shadow: 0 0 15px #f43f5e;
+    }
+    .shutdown-badge { background: #e11d48; color: #fff; }
+    @keyframes pulse {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.7); }
+      70% { transform: scale(1.15); box-shadow: 0 0 0 12px rgba(244, 63, 94, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
+    }
+    .leaflet-popup-content-wrapper {
+      background: #0f172a;
+      color: #e2e8f0;
+      border: 1px solid #06b6d4;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    }
+    .leaflet-popup-tip { background: #0f172a; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    const history = ${pointsJson};
+    const currentLat = ${currentLat};
+    const currentLon = ${currentLon};
+    const focusLat = ${focusLat};
+    const focusLon = ${focusLon};
+    
+    const map = L.map('map', { zoomControl: true, attributionControl: false }).setView([focusLat, focusLon], 16);
+    
+    // ArcGIS High-Res Satellite Imagery + Hybrid Labels
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
+    L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
+
+    const latlngs = [];
+
+    if (history && history.length > 0) {
+      history.forEach((p, idx) => {
+        if (!p.latitude || !p.longitude) return;
+        const latlng = [p.latitude, p.longitude];
+        latlngs.push(latlng);
+
+        const isStart = idx === 0;
+        const isEnd = idx === history.length - 1;
+        const isShutdown = p.isShutdown || p.is_shutdown_event || (p.trigger_reason && p.trigger_reason.includes('SHUTDOWN'));
+        const speedKmh = Math.round((p.speed || 0) * 3.6);
+        const timeStr = p.timestamp ? new Date(p.timestamp).toLocaleTimeString() : (p.formattedTime || ('#' + (idx + 1)));
+
+        let badgeClass = 'custom-badge';
+        if (isShutdown) badgeClass += ' shutdown-badge';
+        else if (isStart) badgeClass += ' start-badge';
+        else if (isEnd) badgeClass += ' live-badge';
+
+        const labelText = isShutdown ? '!' : (isStart ? 'S' : (isEnd ? '★' : (idx + 1)));
+
+        const customIcon = L.divIcon({
+          className: 'wrap',
+          html: '<div class="' + badgeClass + '">' + labelText + '</div>',
+          iconSize: [22, 22],
+          iconAnchor: [11, 11]
+        });
+
+        const marker = L.marker(latlng, { icon: customIcon }).addTo(map);
+        marker.bindPopup(
+          '<div style="font-size: 11px; padding: 2px;">' +
+          '<b style="color: #38bdf8;">' + (isShutdown ? '🚨 THEFT SHUTDOWN' : (isStart ? '🏁 START POINT' : (isEnd ? '📍 CURRENT POSITION' : '📌 POINT #' + (idx + 1)))) + '</b><br/>' +
+          '⏰ Time: <b>' + timeStr + '</b><br/>' +
+          '🏎️ Speed: <b style="color: #4ade80;">' + speedKmh + ' km/h</b><br/>' +
+          '⚡ Reason: <span style="color: #a5f3fc;">' + (p.trigger_reason || 'Travel Point') + '</span><br/>' +
+          '📍 Coords: ' + p.latitude.toFixed(5) + ', ' + p.longitude.toFixed(5) +
+          '</div>'
+        );
+      });
+
+      if (latlngs.length > 1) {
+        const polyline = L.polyline(latlngs, {
+          color: '#06b6d4',
+          weight: 4,
+          opacity: 0.9,
+          dashArray: '6, 6',
+          lineJoin: 'round'
+        }).addTo(map);
+
+        map.fitBounds(polyline.getBounds(), { padding: [25, 25] });
+      }
+    } else {
+      const liveIcon = L.divIcon({
+        className: 'wrap',
+        html: '<div class="custom-badge live-badge">★</div>',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+      L.marker([currentLat, currentLon], { icon: liveIcon }).addTo(map)
+        .bindPopup('<b style="color: #f43f5e;">📍 LIVE POSITION</b><br/>' + currentLat.toFixed(5) + ', ' + currentLon.toFixed(5))
+        .openPopup();
+      L.circle([currentLat, currentLon], { radius: ${accuracyM || 15}, color: '#06b6d4', fillColor: '#06b6d4', fillOpacity: 0.15 }).addTo(map);
+    }
+  </script>
+</body>
+</html>`;
   };
 
   return (
@@ -215,9 +342,9 @@ export default function TacticalRadarDeck() {
 
         {activeView === 'MAP' && (
           <iframe
-            title="Google Satellite View"
-            src={`https://maps.google.com/maps?q=${lat},${lon}&t=k&z=17&ie=UTF8&iwloc=&output=embed`}
-            className="w-full h-full border-none opacity-90"
+            title="In-App Satellite Trajectory Route Map"
+            srcDoc={generateLeafletMapHtml(gpsHistory, lat, lon, accuracy, selectedPoint)}
+            className="w-full h-full border-none"
           />
         )}
 
@@ -252,11 +379,11 @@ export default function TacticalRadarDeck() {
                 />
               </div>
 
-              {gpsHistory.length > 1 && (
+              {gpsHistory.length > 0 && (
                 <button
                   onClick={handleOpenFullRouteMap}
-                  className="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-[10px] font-extrabold text-emerald-300 transition-all"
-                  title="Plot complete road route on Google Maps"
+                  className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border border-emerald-400/40 text-[10px] font-extrabold text-white transition-all shadow-md active:scale-95"
+                  title="View complete multi-point route on in-app satellite map"
                 >
                   🗺️ Open Full Route
                 </button>
@@ -308,16 +435,12 @@ export default function TacticalRadarDeck() {
                 </div>
                 <div className="flex items-center gap-2 pt-1">
                   <button
-                    onClick={() => handleOpenGoogleMaps(selectedPoint.latitude, selectedPoint.longitude)}
-                    className="flex-1 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-[10px] text-center"
+                    onClick={() => {
+                      setActiveView('MAP');
+                    }}
+                    className="flex-1 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-[10px] text-center shadow-md active:scale-95"
                   >
-                    🗺️ Open in Google Maps ↗
-                  </button>
-                  <button
-                    onClick={() => window.open(`https://maps.google.com/maps?q=${selectedPoint.latitude},${selectedPoint.longitude}&t=k&z=19`, '_blank')}
-                    className="flex-1 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-[10px] text-center border border-slate-700"
-                  >
-                    🛰️ Satellite Zoom ↗
+                    🎯 Focus on Satellite Map
                   </button>
                 </div>
               </div>
@@ -337,7 +460,9 @@ export default function TacticalRadarDeck() {
                   return (
                     <div
                       key={idx}
-                      onClick={() => setSelectedPoint(crumb)}
+                      onClick={() => {
+                        setSelectedPoint(crumb);
+                      }}
                       className={`p-2 rounded-xl border flex flex-col gap-0.5 cursor-pointer transition-all ${
                         isSelected
                           ? 'bg-cyan-950/60 border-cyan-400 shadow-md shadow-cyan-500/30'
