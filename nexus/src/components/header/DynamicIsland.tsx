@@ -10,7 +10,6 @@ import {
   VolumeX,
   Wifi,
   Cloud,
-  ArrowUpCircle,
   Activity,
 } from 'lucide-react';
 
@@ -34,18 +33,6 @@ export default function DynamicIsland() {
       nexusWs.sendDirectApi('STOP_AUDIO_STREAM');
       addLog('AUDIO', '🔇 Master Audio Muted');
     }
-  };
-
-  const handlePushOta = () => {
-    const timestamp = Date.now();
-    nexusWs.sendPacket({
-      type: 'DIRECT_API',
-      action: 'UPDATE_COMPANION_APK',
-      apk_url: `/BrainCompanion.apk?t=${timestamp}`,
-      version_code: timestamp,
-      force_install: true,
-    });
-    addLog('OTA UPDATE', `🚀 Broadcasted 1-Click OTA Update (t=${timestamp})`);
   };
 
   return (
@@ -125,16 +112,6 @@ export default function DynamicIsland() {
           >
             <Cloud className="w-3 h-3 text-indigo-400" />
             <span className="hidden sm:inline">Cloud</span>
-          </button>
-
-          {/* 1-Click OTA Push */}
-          <button
-            onClick={handlePushOta}
-            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-white bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-xl border border-cyan-400/40 shadow-sm transition-all active:scale-95"
-            title="Push 1-Click OTA Update to Connected Devices"
-          >
-            <ArrowUpCircle className="w-3 h-3" />
-            <span className="hidden sm:inline">OTA Push</span>
           </button>
         </div>
       </div>
