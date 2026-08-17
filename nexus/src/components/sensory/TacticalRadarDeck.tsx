@@ -18,6 +18,8 @@ const EMPTY_GPS_ARRAY: any[] = [];
 
 export default function TacticalRadarDeck() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [activeView, setActiveView] = useState<'RADAR' | 'MAP' | 'TRAIL'>('RADAR');
+  const [selectedDate, setSelectedDate] = useState<string>('LATEST_7_DAYS');
   const [selectedPoint, setSelectedPoint] = useState<any | null>(null);
   const [distanceThreshold, setDistanceThreshold] = useState<number>(50);
 
