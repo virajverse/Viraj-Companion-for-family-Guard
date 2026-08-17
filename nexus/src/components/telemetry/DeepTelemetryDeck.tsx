@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useNexusStore } from '@/lib/deviceStore';
+import { nexusWs } from '@/lib/websocket';
 import {
   Battery,
   Flame,
