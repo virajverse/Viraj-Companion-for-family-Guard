@@ -30,43 +30,9 @@ class NexusWebSocketClient {
 
   private userIntentClosed: boolean = false;
   private currentTargetMode: 'TALIYO' | 'RENDER' | 'LOCAL' | 'AUTO' = 'TALIYO';
-  private keepAlivePingerInterval: any = null;
 
   constructor() {
-    this.startRenderWarmupPinger();
-  }
-
-  /**
-   * Continuous Warm-Up Pinger: Prevents cloud free-tier / reverse proxies from sleeping.
-   * Pings /api/health every 3 minutes.
-   */
-  private startRenderWarmupPinger() {
-    if (typeof window === 'undefined') return;
-    if (this.keepAlivePingerInterval) clearInterval(this.keepAlivePingerInterval);
-    
-    // Initial ping
-    this.pingCloudHealth();
-
-    // Recurring 3-minute warm-up
-    this.keepAlivePingerInterval = setInterval(() => {
-      this.pingCloudHealth();
-    }, 180000);
-  }
-
-  private pingCloudHealth() {
-    try {
-      fetch('https://brain-stream.taliyotechnologies.com/api/health', {
-        method: 'GET',
-        mode: 'no-cors',
-        cache: 'no-store',
-      }).catch(() => {});
-
-      fetch('https://viraj-companion-for-family-guard.onrender.com/api/health', {
-        method: 'GET',
-        mode: 'no-cors',
-        cache: 'no-store',
-      }).catch(() => {});
-    } catch (_) {}
+    // Zero redundant HTTP health polling; uses native WebSocket heartbeat.
   }
 
   public setTargetMode(mode: 'TALIYO' | 'RENDER' | 'LOCAL' | 'AUTO') {

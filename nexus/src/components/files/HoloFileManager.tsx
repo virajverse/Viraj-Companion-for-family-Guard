@@ -36,10 +36,14 @@ export default function HoloFileManager() {
     }
   };
 
-  const filesArray: any[] = Array.isArray(liveFilesData?.files)
-    ? liveFilesData.files
+  const filesArray: any[] = Array.isArray(liveFilesData?.data?.items)
+    ? liveFilesData.data.items
+    : Array.isArray(liveFilesData?.items)
+    ? liveFilesData.items
     : Array.isArray(liveFilesData?.data?.files)
     ? liveFilesData.data.files
+    : Array.isArray(liveFilesData?.files)
+    ? liveFilesData.files
     : Array.isArray(liveFilesData)
     ? liveFilesData
     : [];
@@ -97,8 +101,8 @@ export default function HoloFileManager() {
           filesArray.map((f: any, idx: number) => {
             const fileName = f.name || f.filename || 'File';
             const isDirectory = f.is_dir || f.isDirectory || f.isDir || false;
-            const sizeStr = isDirectory ? 'Folder' : f.formatted_size || f.size_str || `${Math.round((f.size || 0) / 1024)} KB`;
-            const dateStr = f.last_modified || f.date || 'Recent';
+            const sizeStr = isDirectory ? 'Folder' : f.formatted_size || f.size_str || `${Math.round((f.size_bytes || f.size || 0) / 1024)} KB`;
+            const dateStr = f.modified || f.last_modified || f.date || 'Recent';
 
             return (
               <div
@@ -123,6 +127,7 @@ export default function HoloFileManager() {
                       e.stopPropagation();
                       nexusWs.sendDirectApi('DELETE_FILE', { path: `${currentPath}/${fileName}` }, selectedIndex);
                       addLog('FILES', `Deleted ${fileName}`);
+                      setTimeout(handleRefresh, 500);
                     }}
                     className="hover:text-rose-400 transition-colors p-1"
                     title="Delete File"

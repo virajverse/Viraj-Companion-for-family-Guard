@@ -240,8 +240,9 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
     return { normX, normY, clickX, clickY, width: rect.width, height: rect.height };
   };
 
-  // Touch / Drag / Swipe Event Handlers with Millimeter Precision
+  // Touch / Drag / Swipe Event Handlers with Millimeter Precision (STRICTLY when SCREEN_TOUCH is active)
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (activeVisionMode !== 'SCREEN_TOUCH') return;
     e.preventDefault();
 
     const { normX, normY, clickX, clickY } = getNormalizedCoords(e);
@@ -253,7 +254,10 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragStart) return;
+    if (activeVisionMode !== 'SCREEN_TOUCH' || !dragStart) {
+      setDragStart(null);
+      return;
+    }
     e.preventDefault();
 
     const { normX: endNormX, normY: endNormY } = getNormalizedCoords(e);
@@ -346,6 +350,11 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
       nexusWs.sendDirectApi('STOP_SCREEN_MIRROR', {}, deviceIndex);
       nexusWs.sendDirectApi('STOP_CAMERA_STREAM', {}, deviceIndex);
       nexusWs.sendDirectApi('STREAM_MODE', { stream_mode: 'STANDBY' }, deviceIndex);
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
       addLog('VISION', `Standby / Sleep mode active on Device #${deviceIndex + 1}`);
     }
   };

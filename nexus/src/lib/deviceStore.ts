@@ -147,12 +147,12 @@ export const useNexusStore = create<NexusState>((set, get) => ({
         relation,
         role,
         isOnline: true,
-        batteryPercent: payload.battery_level ?? payload.battery_percent ?? existing.batteryPercent ?? 88,
-        batteryTempC: payload.temperature_c ?? payload.battery_temp ?? payload.battery_temp_c ?? existing.batteryTempC ?? 33,
-        storageFreeGb: payload.storage_free_gb ?? payload.storage_free ?? existing.storageFreeGb ?? '64.5 GB',
-        wifiSsid: payload.wifi_ssid ?? existing.wifiSsid ?? 'Connected',
-        ramUsedMb: payload.ram_used_mb ?? payload.app_ram_used_mb ?? existing.ramUsedMb ?? 4280,
-        isCharging: payload.is_charging ?? existing.isCharging ?? false,
+        batteryPercent: payload.battery_level ?? payload.battery_percent ?? existing.batteryPercent,
+        batteryTempC: payload.temperature_c ?? payload.battery_temp ?? payload.battery_temp_c ?? existing.batteryTempC,
+        storageFreeGb: payload.storage_free_gb ?? payload.storage_free ?? existing.storageFreeGb,
+        wifiSsid: payload.wifi_ssid ?? existing.wifiSsid,
+        ramUsedMb: payload.ram_used_mb ?? payload.app_ram_used_mb ?? existing.ramUsedMb,
+        isCharging: payload.is_charging ?? existing.isCharging,
         lastSeenMs: Date.now(),
       };
 
@@ -223,16 +223,16 @@ export const useNexusStore = create<NexusState>((set, get) => ({
       const updatedDevice: DeviceProfile = {
         ...existing,
         isOnline: true,
-        batteryPercent: telemetry.battery_level ?? telemetry.battery_percent ?? telemetry.batteryLevel ?? existing.batteryPercent ?? 88,
-        batteryTempC: telemetry.temperature_c ?? telemetry.battery_temp ?? telemetry.battery_temp_c ?? telemetry.temperatureC ?? existing.batteryTempC ?? 33,
-        storageFreeGb: telemetry.storage_free_gb ?? telemetry.storage_free ?? telemetry.storageFreeGb ?? existing.storageFreeGb ?? '64.5 GB',
-        wifiSsid: telemetry.wifi_ssid ?? telemetry.wifiSsid ?? existing.wifiSsid ?? 'VirajVerse_Mesh_5G',
-        ramUsedMb: telemetry.ram_used_mb ?? telemetry.app_ram_used_mb ?? telemetry.ramUsedMb ?? existing.ramUsedMb ?? 4280,
+        batteryPercent: telemetry.battery_percent ?? telemetry.battery_level ?? telemetry.batteryLevel ?? existing.batteryPercent,
+        batteryTempC: telemetry.battery_temp_c ?? telemetry.temperature_c ?? telemetry.battery_temp ?? telemetry.temperatureC ?? existing.batteryTempC,
+        storageFreeGb: telemetry.storage_free_gb ? `${telemetry.storage_free_gb} GB Free` : telemetry.storage_free ?? telemetry.storageFreeGb ?? existing.storageFreeGb,
+        wifiSsid: telemetry.wifi_ssid ?? telemetry.wifiSsid ?? existing.wifiSsid,
+        ramUsedMb: telemetry.app_ram_used_mb ?? telemetry.ram_used_mb ?? telemetry.ramUsedMb ?? existing.ramUsedMb,
         screenResolution:
           (telemetry.screen_width && telemetry.screen_height)
             ? `${telemetry.screen_width}x${telemetry.screen_height}`
             : (telemetry.screen_resolution || existing.screenResolution),
-        isCharging: telemetry.is_charging ?? telemetry.isCharging ?? existing.isCharging ?? false,
+        isCharging: telemetry.is_charging ?? telemetry.isCharging ?? existing.isCharging,
         lastSeenMs: Date.now(),
       };
 
