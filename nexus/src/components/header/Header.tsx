@@ -141,8 +141,22 @@ export default function Header() {
           <span>{isWsConnected ? 'Bridge Active (Online)' : 'Connect Bridge'}</span>
         </button>
 
-        {/* Endpoint Relay Mode Switcher (Render Cloud vs Localhost) */}
+        {/* Endpoint Relay Mode Switcher (Taliyo Cloud vs Render Cloud vs Localhost) */}
         <div className="flex items-center p-0.5 rounded-lg bg-slate-900 border border-slate-700">
+          <button
+            onClick={() => {
+              nexusWs.setTargetMode('TALIYO');
+              addLog('NETWORK', '🌐 Switched target relay to Taliyo Cloud (brain-stream.taliyotechnologies.com)');
+            }}
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+              nexusWs.getTargetMode() === 'TALIYO'
+                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+            title="Connect to Taliyo Cloud (brain-stream.taliyotechnologies.com)"
+          >
+            <Zap className="w-3.5 h-3.5" /> Taliyo Cloud
+          </button>
           <button
             onClick={() => {
               nexusWs.setTargetMode('RENDER');
@@ -153,9 +167,9 @@ export default function Header() {
                 ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
-            title="Connect directly to Render Cloud Server where your phone is online"
+            title="Connect directly to Render Cloud (viraj-companion-for-family-guard.onrender.com)"
           >
-            <Cloud className="w-3.5 h-3.5" /> Render Cloud
+            <Cloud className="w-3.5 h-3.5" /> Render
           </button>
           <button
             onClick={() => {
@@ -164,7 +178,7 @@ export default function Header() {
             }}
             className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
               nexusWs.getTargetMode() === 'LOCAL'
-                ? 'bg-gradient-to-r from-cyan-600 to-teal-600 text-white shadow-md'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
             title="Connect to local Python server (127.0.0.1:8080)"

@@ -17,8 +17,8 @@ class NexusWebSocketClient {
   private videoCallbacks: Set<VideoFrameCallback> = new Set();
   private audioCallbacks: Set<AudioChunkCallback> = new Set();
 
+  public readonly TALIYO_CLOUD_ENDPOINT = 'wss://brain-stream.taliyotechnologies.com/ws';
   public readonly RENDER_CLOUD_ENDPOINT = 'wss://viraj-companion-for-family-guard.onrender.com/ws';
-  public readonly SECONDARY_CLOUD_ENDPOINT = 'wss://brain-stream.taliyotechnologies.com/ws';
   public readonly LOCAL_ENDPOINT = 'ws://127.0.0.1:8080/ws';
 
   public getLocalEndpoint(): string {
@@ -29,7 +29,7 @@ class NexusWebSocketClient {
   }
 
   private userIntentClosed: boolean = false;
-  private currentTargetMode: 'RENDER' | 'LOCAL' | 'AUTO' = 'RENDER';
+  private currentTargetMode: 'TALIYO' | 'RENDER' | 'LOCAL' | 'AUTO' = 'TALIYO';
   private keepAlivePingerInterval: any = null;
 
   constructor() {
@@ -37,7 +37,7 @@ class NexusWebSocketClient {
   }
 
   /**
-   * Continuous Warm-Up Pinger: Prevents Render free-tier instance from sleeping.
+   * Continuous Warm-Up Pinger: Prevents cloud free-tier / reverse proxies from sleeping.
    * Pings /api/health every 3 minutes.
    */
   private startRenderWarmupPinger() {
@@ -45,16 +45,22 @@ class NexusWebSocketClient {
     if (this.keepAlivePingerInterval) clearInterval(this.keepAlivePingerInterval);
     
     // Initial ping
-    this.pingRenderHealth();
+    this.pingCloudHealth();
 
     // Recurring 3-minute warm-up
     this.keepAlivePingerInterval = setInterval(() => {
-      this.pingRenderHealth();
+      this.pingCloudHealth();
     }, 180000);
   }
 
-  private pingRenderHealth() {
+  private pingCloudHealth() {
     try {
+      fetch('https://brain-stream.taliyotechnologies.com/api/health', {
+        method: 'GET',
+        mode: 'no-cors',
+        cache: 'no-store',
+      }).catch(() => {});
+
       fetch('https://viraj-companion-for-family-guard.onrender.com/api/health', {
         method: 'GET',
         mode: 'no-cors',
@@ -63,12 +69,12 @@ class NexusWebSocketClient {
     } catch (_) {}
   }
 
-  public setTargetMode(mode: 'RENDER' | 'LOCAL' | 'AUTO') {
+  public setTargetMode(mode: 'TALIYO' | 'RENDER' | 'LOCAL' | 'AUTO') {
     this.currentTargetMode = mode;
-    this.connect(mode === 'RENDER');
+    this.connect();
   }
 
-  public getTargetMode(): 'RENDER' | 'LOCAL' | 'AUTO' {
+  public getTargetMode(): 'TALIYO' | 'RENDER' | 'LOCAL' | 'AUTO' {
     return this.currentTargetMode;
   }
 
@@ -83,14 +89,22 @@ class NexusWebSocketClient {
     this.isConnecting = true;
     
     // Determine target URL based on mode
-    let baseUrl = this.RENDER_CLOUD_ENDPOINT;
-    if (this.currentTargetMode === 'LOCAL' && !forceCloud) {
+    let baseUrl = this.TALIYO_CLOUD_ENDPOINT;
+    let label = 'Taliyo Brain-Stream';
+
+    if (this.currentTargetMode === 'TALIYO') {
+      baseUrl = this.TALIYO_CLOUD_ENDPOINT;
+      label = 'Taliyo Cloud (brain-stream.taliyotechnologies.com)';
+    } else if (this.currentTargetMode === 'RENDER') {
+      baseUrl = this.RENDER_CLOUD_ENDPOINT;
+      label = 'Render Cloud (viraj-companion-for-family-guard)';
+    } else if (this.currentTargetMode === 'LOCAL') {
       baseUrl = this.getLocalEndpoint();
-    } else if (forceCloud || this.currentTargetMode === 'RENDER') {
-      baseUrl = this.RENDER_CLOUD_ENDPOINT;
+      label = 'Localhost (127.0.0.1:8080)';
     } else {
-      // Auto mode: If on localhost, prefer Render cloud so local dev connects to cloud phones directly
-      baseUrl = this.RENDER_CLOUD_ENDPOINT;
+      // AUTO mode: default to Taliyo primary
+      baseUrl = this.TALIYO_CLOUD_ENDPOINT;
+      label = 'Auto Matrix (Taliyo Primary)';
     }
 
     const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -101,7 +115,7 @@ class NexusWebSocketClient {
     if (ticketParam) targetUrl += `&ticket=${encodeURIComponent(ticketParam)}`;
     if (authParam) targetUrl += `&auth=${encodeURIComponent(authParam)}`;
 
-    useNexusStore.getState().addLog('NETWORK', `⚡ Connecting Studio to ${baseUrl === this.RENDER_CLOUD_ENDPOINT ? 'Render Cloud' : 'Local Server'} (${targetUrl})...`);
+    useNexusStore.getState().addLog('NETWORK', `⚡ Connecting Studio to ${label} (${targetUrl})...`);
 
     try {
       this.ws = new WebSocket(targetUrl);
