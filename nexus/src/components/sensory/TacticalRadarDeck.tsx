@@ -18,8 +18,14 @@ const EMPTY_GPS_ARRAY: any[] = [];
 
 export default function TacticalRadarDeck() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [activeView, setActiveView] = useState<'RADAR' | 'MAP' | 'TRAIL'>('RADAR');
-  const [selectedDate, setSelectedDate] = useState<string>('LATEST_7_DAYS');
+  const [selectedPoint, setSelectedPoint] = useState<any | null>(null);
+  const [distanceThreshold, setDistanceThreshold] = useState<number>(50);
+
+  const handleSetThreshold = (meters: number) => {
+    setDistanceThreshold(meters);
+    nexusWs.sendDirectApi('SET_GPS_DISTANCE_THRESHOLD', { distance_meters: meters }, selectedIndex);
+    addLog('TACTICAL', `⚡ Dynamic Movement Delta set to ${meters}m on Device #${selectedIndex + 1}`);
+  };
   const selectedIndex = useNexusStore((state) => state.selectedDeviceIndex ?? 0);
   const targetDevice = useNexusStore((state) => state.devices[selectedIndex]);
   const rawGpsHistory = useNexusStore((state) => state.gpsHistory[selectedIndex]);
@@ -255,36 +261,94 @@ export default function TacticalRadarDeck() {
               )}
             </div>
 
-            {/* Checkpoints Count & Legend */}
-            <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-              <span className="text-cyan-400 font-bold">{gpsHistory.length} Checkpoint(s) (Every 50m)</span>
-              <span>Lifetime SQLite Blackbox</span>
+            {/* Checkpoints Count & Dynamic Geodesic Threshold Selector */}
+            <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-slate-400 font-mono">
+              <span className="text-cyan-400 font-bold">{gpsHistory.length} Point(s) Recorded</span>
+              <div className="flex items-center gap-1">
+                <span className="text-slate-500">Threshold:</span>
+                {[25, 50, 70, 100, 200].map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => handleSetThreshold(m)}
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all ${
+                      distanceThreshold === m
+                        ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                        : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                    }`}
+                    title={`Log a new coordinate every ${m} meters of physical movement`}
+                  >
+                    {m}m
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* Selected Checkpoint Detailed Inspector Modal / Banner */}
+            {selectedPoint && (
+              <div className="p-2.5 rounded-xl bg-slate-900 border border-cyan-500/50 shadow-lg flex flex-col gap-1.5 text-[11px] animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-cyan-300 flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+                    Checkpoint Details
+                  </span>
+                  <button
+                    onClick={() => setSelectedPoint(null)}
+                    className="text-slate-400 hover:text-white text-xs px-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-1 text-[10px] font-mono text-slate-300">
+                  <div>📅 <span className="text-white">{selectedPoint.timestamp ? new Date(selectedPoint.timestamp).toLocaleString() : 'N/A'}</span></div>
+                  <div>⚡ Delta: <span className="text-cyan-300 font-bold">{selectedPoint.trigger_reason || selectedPoint.reason || 'Travel Point'}</span></div>
+                  <div>📍 Lat/Lon: <span className="text-white">{selectedPoint.latitude?.toFixed(5)}°, {selectedPoint.longitude?.toFixed(5)}°</span></div>
+                  <div>🏎️ Speed: <span className="text-emerald-400">{Math.round((selectedPoint.speed || 0) * 3.6)} km/h</span></div>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={() => handleOpenGoogleMaps(selectedPoint.latitude, selectedPoint.longitude)}
+                    className="flex-1 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-[10px] text-center"
+                  >
+                    🗺️ Open in Google Maps ↗
+                  </button>
+                  <button
+                    onClick={() => window.open(`https://maps.google.com/maps?q=${selectedPoint.latitude},${selectedPoint.longitude}&t=k&z=19`, '_blank')}
+                    className="flex-1 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-[10px] text-center border border-slate-700"
+                  >
+                    🛰️ Satellite Zoom ↗
+                  </button>
+                </div>
+              </div>
+            )}
 
             {gpsHistory.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-4 text-slate-500 text-[11px]">
                 <MapPin className="w-6 h-6 mb-1 text-slate-600 animate-pulse" />
                 <span>Zero coordinates logged yet for this date.</span>
-                <span className="text-[10px] text-slate-600 mt-1">Coordinates log automatically on every 50m movement!</span>
+                <span className="text-[10px] text-slate-600 mt-1">Coordinates log automatically on every {distanceThreshold}m movement!</span>
               </div>
             ) : (
               <div className="flex flex-col gap-1.5 overflow-y-auto max-h-52 pr-1">
                 {gpsHistory.slice().reverse().map((crumb: any, idx: number) => {
                   const isShutdown = crumb.isShutdown || crumb.is_shutdown_event || crumb.trigger_reason?.includes('SHUTDOWN');
+                  const isSelected = selectedPoint && selectedPoint.latitude === crumb.latitude && selectedPoint.longitude === crumb.longitude;
                   return (
                     <div
                       key={idx}
-                      onClick={() => handleOpenGoogleMaps(crumb.latitude, crumb.longitude)}
+                      onClick={() => setSelectedPoint(crumb)}
                       className={`p-2 rounded-xl border flex flex-col gap-0.5 cursor-pointer transition-all ${
-                        isShutdown
+                        isSelected
+                          ? 'bg-cyan-950/60 border-cyan-400 shadow-md shadow-cyan-500/30'
+                          : isShutdown
                           ? 'bg-rose-950/40 border-rose-500/60 shadow-md shadow-rose-950/50 hover:border-rose-400'
                           : 'bg-slate-900/60 border-slate-800 hover:border-cyan-500/40'
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className={`text-[10px] font-extrabold flex items-center gap-1 ${isShutdown ? 'text-rose-400 animate-pulse' : 'text-cyan-300'}`}>
+                        <span className={`text-[10px] font-extrabold flex items-center gap-1 ${isShutdown ? 'text-rose-400 animate-pulse' : isSelected ? 'text-cyan-300' : 'text-slate-200'}`}>
                           <MapPin className="w-3 h-3" />
-                          {isShutdown ? '🚨 THEFT SHUTDOWN POINT' : `50m Point #${gpsHistory.length - idx}`}
+                          {isShutdown ? '🚨 THEFT SHUTDOWN POINT' : `Point #${gpsHistory.length - idx}`}
+                          {crumb.trigger_reason && <span className="text-[9px] font-normal text-slate-400">({crumb.trigger_reason})</span>}
                         </span>
                         <span className="text-[9px] font-mono text-slate-400">
                           {crumb.formattedTime || (crumb.timestamp ? new Date(crumb.timestamp).toLocaleTimeString() : 'Recent')}
@@ -292,7 +356,7 @@ export default function TacticalRadarDeck() {
                       </div>
                       <div className="text-[10px] font-mono text-white flex items-center justify-between pt-0.5">
                         <span>{crumb.latitude?.toFixed(5)}°, {crumb.longitude?.toFixed(5)}°</span>
-                        <span className="text-[9px] text-emerald-400 font-bold">Open Map ➔</span>
+                        <span className="text-[9px] text-cyan-400 font-bold">Inspect Details ➔</span>
                       </div>
                     </div>
                   );
