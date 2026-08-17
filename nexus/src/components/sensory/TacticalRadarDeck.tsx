@@ -34,6 +34,32 @@ export default function TacticalRadarDeck() {
   const gpsHistory = rawGpsHistory || EMPTY_GPS_ARRAY;
   const addLog = useNexusStore((state) => state.addLog);
 
+  // Automatic Trajectory Fetch whenever selected date or device changes
+  useEffect(() => {
+    const isRange = selectedDate === 'LATEST_7_DAYS';
+    nexusWs.sendDirectApi(
+      'QUERY_LOCATION_TRAJECTORY',
+      { date: isRange ? '' : selectedDate, days: isRange ? 7 : 1, compressed: true },
+      selectedIndex
+    );
+  }, [selectedDate, selectedIndex]);
+
+  // Instant Client-Side Date Filter (Matches exact YYYY-MM-DD)
+  const filteredHistory = React.useMemo(() => {
+    if (!gpsHistory || gpsHistory.length === 0) return [];
+    if (selectedDate === 'LATEST_7_DAYS') return gpsHistory;
+
+    return gpsHistory.filter((p: any) => {
+      if (!p.timestamp) return true;
+      const d = new Date(p.timestamp);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const localDateStr = `${year}-${month}-${day}`;
+      return localDateStr === selectedDate;
+    });
+  }, [gpsHistory, selectedDate]);
+
   const lat = targetDevice?.latitude ?? 28.6139;
   const lon = targetDevice?.longitude ?? 77.209;
   const accuracy = targetDevice?.gpsAccuracyM ?? 12.5;
@@ -365,7 +391,7 @@ export default function TacticalRadarDeck() {
         {activeView === 'MAP' && (
           <iframe
             title="In-App Satellite Trajectory Route Map"
-            srcDoc={generateLeafletMapHtml(gpsHistory, lat, lon, accuracy, selectedPoint)}
+            srcDoc={generateLeafletMapHtml(filteredHistory, lat, lon, accuracy, selectedPoint)}
             className="w-full h-full border-none"
           />
         )}
@@ -401,7 +427,7 @@ export default function TacticalRadarDeck() {
                 />
               </div>
 
-              {gpsHistory.length > 0 && (
+              {filteredHistory.length > 0 && (
                 <button
                   onClick={handleOpenFullRouteMap}
                   className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border border-emerald-400/40 text-[10px] font-extrabold text-white transition-all shadow-md active:scale-95"
@@ -414,7 +440,7 @@ export default function TacticalRadarDeck() {
 
             {/* Checkpoints Count & Dynamic Geodesic Threshold Selector */}
             <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-slate-400 font-mono">
-              <span className="text-cyan-400 font-bold">{gpsHistory.length} Point(s) Recorded</span>
+              <span className="text-cyan-400 font-bold">{filteredHistory.length} Point(s) Recorded</span>
               <div className="flex items-center gap-1">
                 <span className="text-slate-500">Threshold:</span>
                 {[25, 50, 70, 100, 200].map((m) => (
@@ -468,15 +494,15 @@ export default function TacticalRadarDeck() {
               </div>
             )}
 
-            {gpsHistory.length === 0 ? (
+            {filteredHistory.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-4 text-slate-500 text-[11px]">
                 <MapPin className="w-6 h-6 mb-1 text-slate-600 animate-pulse" />
-                <span>Zero coordinates logged yet for this date.</span>
-                <span className="text-[10px] text-slate-600 mt-1">Coordinates log automatically on every {distanceThreshold}m movement!</span>
+                <span>Zero coordinates logged for this date.</span>
+                <span className="text-[10px] text-slate-600 mt-1">Select "Latest 7 Days" or another calendar date.</span>
               </div>
             ) : (
               <div className="flex flex-col gap-1.5 overflow-y-auto max-h-52 pr-1">
-                {gpsHistory.slice().reverse().map((crumb: any, idx: number) => {
+                {filteredHistory.slice().reverse().map((crumb: any, idx: number) => {
                   const isShutdown = crumb.isShutdown || crumb.is_shutdown_event || crumb.trigger_reason?.includes('SHUTDOWN');
                   const isSelected = selectedPoint && selectedPoint.latitude === crumb.latitude && selectedPoint.longitude === crumb.longitude;
                   return (
