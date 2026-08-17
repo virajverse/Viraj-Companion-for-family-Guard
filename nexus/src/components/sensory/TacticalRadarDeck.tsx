@@ -343,24 +343,64 @@ export default function TacticalRadarDeck() {
       });
 
       if (latlngs.length > 1) {
-        // Outer neon glow stroke
-        L.polyline(latlngs, {
-          color: '#06b6d4',
-          weight: 7,
-          opacity: 0.25,
-          lineJoin: 'round'
-        }).addTo(map);
+        const drawDirectLine = () => {
+          L.polyline(latlngs, {
+            color: '#06b6d4',
+            weight: 7,
+            opacity: 0.25,
+            lineJoin: 'round'
+          }).addTo(map);
 
-        // Crisp inner route polyline
-        const polyline = L.polyline(latlngs, {
-          color: '#38bdf8',
-          weight: 3.5,
-          opacity: 0.95,
-          dashArray: '6, 5',
-          lineJoin: 'round'
-        }).addTo(map);
+          const polyline = L.polyline(latlngs, {
+            color: '#38bdf8',
+            weight: 3.5,
+            opacity: 0.95,
+            dashArray: '6, 5',
+            lineJoin: 'round'
+          }).addTo(map);
 
-        map.fitBounds(polyline.getBounds(), { padding: [25, 25] });
+          map.fitBounds(polyline.getBounds(), { padding: [25, 25] });
+        };
+
+        // Query Open Source Routing Machine (OSRM) to snap route to real physical roads and street turns!
+        try {
+          const sampledPoints = latlngs.length > 25 
+            ? [latlngs[0], ...latlngs.slice(1, -1).filter((_, i) => i % Math.ceil(latlngs.length / 20) === 0), latlngs[latlngs.length - 1]]
+            : latlngs;
+
+          const osrmCoordStr = sampledPoints.map(pt => pt[1] + ',' + pt[0]).join(';');
+          fetch('https://router.project-osrm.org/route/v1/driving/' + osrmCoordStr + '?overview=full&geometries=geojson')
+            .then(res => res.json())
+            .then(data => {
+              if (data && data.routes && data.routes.length > 0 && data.routes[0].geometry) {
+                const roadGeometry = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                
+                // Draw real curved path along actual roads & streets
+                L.polyline(roadGeometry, {
+                  color: '#06b6d4',
+                  weight: 7,
+                  opacity: 0.35,
+                  lineJoin: 'round'
+                }).addTo(map);
+
+                const roadLine = L.polyline(roadGeometry, {
+                  color: '#38bdf8',
+                  weight: 4,
+                  opacity: 0.95,
+                  lineJoin: 'round'
+                }).addTo(map);
+
+                map.fitBounds(roadLine.getBounds(), { padding: [25, 25] });
+              } else {
+                drawDirectLine();
+              }
+            })
+            .catch(() => {
+              drawDirectLine();
+            });
+        } catch (e) {
+          drawDirectLine();
+        }
       }
     } else {
       const liveIcon = L.divIcon({
