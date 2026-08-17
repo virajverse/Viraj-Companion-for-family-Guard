@@ -242,6 +242,35 @@ def build_apk():
     except Exception as ex:
         print("[INFO] Server OTA broadcast note (Server offline or starting up):", str(ex))
 
+    # ── 10. Automated Zero-Touch Git Commit & Push ──────────────────────────
+    print("\n[GIT AUTO-PUSH PIPELINE] Automatically committing and pushing new APK to GitHub origin/main...")
+    try:
+        commit_msg = f"release(apk): Auto-build & deploy BrainCompanion APK {ver_tag} (code #{new_code})"
+        
+        # 1. Stage changes in companion_studio
+        git_add = subprocess.run(["git", "add", "."], cwd=SUITE_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if git_add.returncode == 0:
+            print("  ✓ Staged all companion studio files & APK archives.")
+            
+            # 2. Commit
+            git_commit = subprocess.run(["git", "commit", "-m", commit_msg], cwd=SUITE_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            if git_commit.returncode == 0:
+                print(f"  ✓ Created Git Commit: {commit_msg}")
+            else:
+                msg = git_commit.stdout.strip() or git_commit.stderr.strip()
+                print(f"  ℹ Commit Status: {msg}")
+            
+            # 3. Push to origin main
+            git_push = subprocess.run(["git", "push", "origin", "main"], cwd=SUITE_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            if git_push.returncode == 0:
+                print(f"  🚀 SUCCESS! Pushed APK {ver_tag} & latest binary directly to GitHub & Render Cloud!")
+            else:
+                print(f"  ⚠️ Git Push Notice: {git_push.stderr.strip() or git_push.stdout.strip()}")
+        else:
+            print(f"  ⚠️ Git Add Notice: {git_add.stderr}")
+    except Exception as ex:
+        print(f"  ⚠️ Git Auto-Push Error: {ex}")
+
     return final_latest_apk
 
 if __name__ == "__main__":
