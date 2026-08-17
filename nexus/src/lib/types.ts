@@ -37,7 +37,7 @@ export interface IntruderPhoto {
   deviceIndex: number;
 }
 
-export type VisionMode = 'SCREEN_VIEW' | 'SCREEN_TOUCH' | 'CAM_BACK' | 'CAM_FRONT' | 'STOP';
+export type VisionMode = 'SCREEN_VIEW' | 'SCREEN_TOUCH' | 'TOUCH_ONLY' | 'CAM_BACK' | 'CAM_FRONT' | 'STOP';
 export type EndpointType = 'LOCAL' | 'CLOUD' | 'AUTO';
 
 export interface OutboundPacket {

@@ -57,7 +57,7 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
   const activeDevice = useNexusStore((state) => state.devices[deviceIndex]);
   const addLog = useNexusStore((state) => state.addLog);
 
-  // Parse phone real physical resolution (e.g. 1080x2400)
+  // Parse phone real physical resolution (e.g. 1080x2400 or 1080x2460)
   const getDeviceDimensions = () => {
     if (activeDevice?.screenResolution) {
       const parts = activeDevice.screenResolution.split('x').map(Number);
@@ -65,12 +65,17 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
         return { width: parts[0], height: parts[1] };
       }
     }
-    const canvas = canvasRef.current;
-    if (canvas && canvas.width > 0 && canvas.height > 0) {
-      return { width: canvas.width, height: canvas.height };
-    }
     return { width: 1080, height: 2400 };
   };
+
+  // Keep aspect ratio & resolution synced with true smartphone profile in Screen / Touch / Standby modes
+  useEffect(() => {
+    if (activeVisionMode !== 'CAM_BACK' && activeVisionMode !== 'CAM_FRONT') {
+      const dims = getDeviceDimensions();
+      setStreamAspect(dims.width / dims.height);
+      setResolution(`${dims.width}x${dims.height}`);
+    }
+  }, [activeVisionMode, activeDevice?.screenResolution, deviceIndex]);
 
   // Optimized Frame Listener & GPU Desynchronized Rendering
   useEffect(() => {
@@ -240,9 +245,9 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
     return { normX, normY, clickX, clickY, width: rect.width, height: rect.height };
   };
 
-  // Touch / Drag / Swipe Event Handlers with Millimeter Precision (STRICTLY when SCREEN_TOUCH is active)
+  // Touch / Drag / Swipe Event Handlers with Millimeter Precision (STRICTLY when SCREEN_TOUCH or TOUCH_ONLY is active)
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (activeVisionMode !== 'SCREEN_TOUCH') return;
+    if (activeVisionMode !== 'SCREEN_TOUCH' && activeVisionMode !== 'TOUCH_ONLY') return;
     e.preventDefault();
 
     const { normX, normY, clickX, clickY } = getNormalizedCoords(e);
@@ -254,7 +259,7 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (activeVisionMode !== 'SCREEN_TOUCH' || !dragStart) {
+    if ((activeVisionMode !== 'SCREEN_TOUCH' && activeVisionMode !== 'TOUCH_ONLY') || !dragStart) {
       setDragStart(null);
       return;
     }
@@ -331,13 +336,24 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
     addLog('PERCEPTION', `1-Shot HD Snapshot requested for Device #${deviceIndex + 1}`);
   };
 
-  const setMode = (mode: 'SCREEN_VIEW' | 'SCREEN_TOUCH' | 'CAM_BACK' | 'CAM_FRONT' | 'STOP') => {
+  const setMode = (mode: 'SCREEN_VIEW' | 'SCREEN_TOUCH' | 'TOUCH_ONLY' | 'CAM_BACK' | 'CAM_FRONT' | 'STOP') => {
     setVisionMode(mode);
     if (mode === 'SCREEN_VIEW' || mode === 'SCREEN_TOUCH') {
       nexusWs.sendDirectApi('STOP_CAMERA_STREAM', {}, deviceIndex);
       nexusWs.sendDirectApi('START_SCREEN_MIRROR', {}, deviceIndex);
       nexusWs.sendDirectApi('STREAM_MODE', { stream_mode: 'ACTIVE' }, deviceIndex);
       addLog('VISION', `Engaged Screen Mirror [${mode}] on Device #${deviceIndex + 1}`);
+    } else if (mode === 'TOUCH_ONLY') {
+      // ✋ Headless Touch Only Mode: Stops all video streams (0 kbps video stream), enables remote gestures
+      nexusWs.sendDirectApi('STOP_SCREEN_MIRROR', {}, deviceIndex);
+      nexusWs.sendDirectApi('STOP_CAMERA_STREAM', {}, deviceIndex);
+      nexusWs.sendDirectApi('STREAM_MODE', { stream_mode: 'STANDBY' }, deviceIndex);
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      addLog('TOUCH', `✋ Remote TouchPad active on Device #${deviceIndex + 1} (Zero Video Streaming / 0 kbps)`);
     } else if (mode === 'CAM_BACK') {
       nexusWs.sendDirectApi('STOP_SCREEN_MIRROR', {}, deviceIndex);
       nexusWs.sendDirectApi('START_CAMERA_STREAM', { facing: 'BACK' }, deviceIndex);
@@ -413,6 +429,14 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
               className="absolute -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-cyan-400/40 border-2 border-cyan-300 animate-ping pointer-events-none"
             />
           )}
+
+          {/* ✋ Headless Touchpad Active Overlay (No Video Stream - Clear Canvas View) */}
+          {activeVisionMode === 'TOUCH_ONLY' && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 bg-purple-950/80 border border-purple-500/50 rounded-full pointer-events-none text-center select-none backdrop-blur-md shadow-lg">
+              <Hand className="w-3.5 h-3.5 text-purple-300 animate-pulse" />
+              <span className="text-[10px] font-black text-purple-200 tracking-wider">TOUCHPAD ACTIVE (0 KBPS)</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -442,10 +466,10 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
           <Square className="w-4 h-4" />
         </button>
 
-        <div className="h-4 w-[1px] bg-slate-800 mx-1" />
+        <div className="h-4 w-px bg-slate-800 mx-1" />
 
         <button
-          onClick={() => handleNavAction('SWIPE', { direction: 'UP' }, 'Swipe UP')}
+          onClick={() => handleNavAction('GESTURE_SWIPE', { from_x: 540, from_y: 1600, to_x: 540, to_y: 400, duration_ms: 250 }, 'Swipe Up')}
           className="p-1.5 rounded-lg hover:bg-slate-800 hover:text-cyan-300 transition-colors active:scale-95"
           title="Swipe Up"
         >
@@ -453,7 +477,7 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
         </button>
 
         <button
-          onClick={() => handleNavAction('SWIPE', { direction: 'DOWN' }, 'Swipe DOWN')}
+          onClick={() => handleNavAction('GESTURE_SWIPE', { from_x: 540, from_y: 400, to_x: 540, to_y: 1600, duration_ms: 250 }, 'Swipe Down')}
           className="p-1.5 rounded-lg hover:bg-slate-800 hover:text-cyan-300 transition-colors active:scale-95"
           title="Swipe Down"
         >
@@ -461,7 +485,7 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
         </button>
 
         <button
-          onClick={() => handleNavAction('SWIPE', { direction: 'LEFT' }, 'Swipe LEFT')}
+          onClick={() => handleNavAction('GESTURE_SWIPE', { from_x: 900, from_y: 1000, to_x: 100, to_y: 1000, duration_ms: 250 }, 'Swipe Left')}
           className="p-1.5 rounded-lg hover:bg-slate-800 hover:text-cyan-300 transition-colors active:scale-95"
           title="Swipe Left"
         >
@@ -469,14 +493,14 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
         </button>
 
         <button
-          onClick={() => handleNavAction('SWIPE', { direction: 'RIGHT' }, 'Swipe RIGHT')}
+          onClick={() => handleNavAction('GESTURE_SWIPE', { from_x: 100, from_y: 1000, to_x: 900, to_y: 1000, duration_ms: 250 }, 'Swipe Right')}
           className="p-1.5 rounded-lg hover:bg-slate-800 hover:text-cyan-300 transition-colors active:scale-95"
           title="Swipe Right"
         >
           <ChevronRight className="w-4 h-4" />
         </button>
 
-        <div className="h-4 w-[1px] bg-slate-800 mx-1" />
+        <div className="h-4 w-px bg-slate-800 mx-1" />
 
         <button
           onClick={toggleTorch}
@@ -518,6 +542,18 @@ export default function HoloViewport({ deviceIndex: propDeviceIndex }: HoloViewp
           }`}
         >
           <Hand className="w-3.5 h-3.5" /> Touch Ctrl
+        </button>
+
+        <button
+          onClick={() => setMode('TOUCH_ONLY')}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all active:scale-95 border ${
+            activeVisionMode === 'TOUCH_ONLY'
+              ? 'bg-purple-500 text-slate-950 border-purple-400 shadow-md shadow-purple-500/20'
+              : 'bg-slate-900 border-slate-700 hover:border-purple-400 text-slate-200'
+          }`}
+          title="Headless Touchpad: Control phone touch blindly without video streaming"
+        >
+          <Hand className="w-3.5 h-3.5 text-purple-400" /> Touch Only
         </button>
 
         <button
