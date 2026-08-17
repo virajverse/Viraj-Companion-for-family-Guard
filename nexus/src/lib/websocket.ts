@@ -17,28 +17,82 @@ class NexusWebSocketClient {
   private videoCallbacks: Set<VideoFrameCallback> = new Set();
   private audioCallbacks: Set<AudioChunkCallback> = new Set();
 
-  public readonly CLOUD_ENDPOINT = 'wss://brain-stream.taliyotechnologies.com/ws';
+  public readonly RENDER_CLOUD_ENDPOINT = 'wss://viraj-companion-for-family-guard.onrender.com/ws';
+  public readonly SECONDARY_CLOUD_ENDPOINT = 'wss://brain-stream.taliyotechnologies.com/ws';
+  public readonly LOCAL_ENDPOINT = 'ws://127.0.0.1:8080/ws';
 
   public getLocalEndpoint(): string {
-    if (typeof window === 'undefined') return 'ws://127.0.0.1:8080/ws';
+    if (typeof window === 'undefined') return this.LOCAL_ENDPOINT;
     let host = window.location.hostname || '127.0.0.1';
     if (host === 'localhost') host = '127.0.0.1';
     return `ws://${host}:8080/ws`;
   }
 
   private userIntentClosed: boolean = false;
+  private currentTargetMode: 'RENDER' | 'LOCAL' | 'AUTO' = 'RENDER';
+  private keepAlivePingerInterval: any = null;
 
-  public connect(forceCloud: boolean = false) {
+  constructor() {
+    this.startRenderWarmupPinger();
+  }
+
+  /**
+   * Continuous Warm-Up Pinger: Prevents Render free-tier instance from sleeping.
+   * Pings /api/health every 3 minutes.
+   */
+  private startRenderWarmupPinger() {
+    if (typeof window === 'undefined') return;
+    if (this.keepAlivePingerInterval) clearInterval(this.keepAlivePingerInterval);
+    
+    // Initial ping
+    this.pingRenderHealth();
+
+    // Recurring 3-minute warm-up
+    this.keepAlivePingerInterval = setInterval(() => {
+      this.pingRenderHealth();
+    }, 180000);
+  }
+
+  private pingRenderHealth() {
+    try {
+      fetch('https://viraj-companion-for-family-guard.onrender.com/api/health', {
+        method: 'GET',
+        mode: 'no-cors',
+        cache: 'no-store',
+      }).catch(() => {});
+    } catch (_) {}
+  }
+
+  public setTargetMode(mode: 'RENDER' | 'LOCAL' | 'AUTO') {
+    this.currentTargetMode = mode;
+    this.connect(mode === 'RENDER');
+  }
+
+  public getTargetMode(): 'RENDER' | 'LOCAL' | 'AUTO' {
+    return this.currentTargetMode;
+  }
+
+  public connect(forceCloud: boolean = true) {
     if (typeof window === 'undefined') return;
     this.userIntentClosed = false;
 
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
-      if (!forceCloud) return;
       this.disconnect();
     }
 
     this.isConnecting = true;
-    const baseUrl = forceCloud ? this.CLOUD_ENDPOINT : this.getLocalEndpoint();
+    
+    // Determine target URL based on mode
+    let baseUrl = this.RENDER_CLOUD_ENDPOINT;
+    if (this.currentTargetMode === 'LOCAL' && !forceCloud) {
+      baseUrl = this.getLocalEndpoint();
+    } else if (forceCloud || this.currentTargetMode === 'RENDER') {
+      baseUrl = this.RENDER_CLOUD_ENDPOINT;
+    } else {
+      // Auto mode: If on localhost, prefer Render cloud so local dev connects to cloud phones directly
+      baseUrl = this.RENDER_CLOUD_ENDPOINT;
+    }
+
     const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
     const ticketParam = urlParams?.get('ticket') || '';
     const authParam = urlParams?.get('auth') || '';
@@ -47,7 +101,7 @@ class NexusWebSocketClient {
     if (ticketParam) targetUrl += `&ticket=${encodeURIComponent(ticketParam)}`;
     if (authParam) targetUrl += `&auth=${encodeURIComponent(authParam)}`;
 
-    useNexusStore.getState().addLog('NETWORK', `Initiating connection to ${targetUrl}...`);
+    useNexusStore.getState().addLog('NETWORK', `⚡ Connecting Studio to ${baseUrl === this.RENDER_CLOUD_ENDPOINT ? 'Render Cloud' : 'Local Server'} (${targetUrl})...`);
 
     try {
       this.ws = new WebSocket(targetUrl);

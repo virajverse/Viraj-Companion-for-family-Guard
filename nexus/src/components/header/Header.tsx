@@ -68,7 +68,7 @@ export default function Header() {
 
   const handleOtaUpdate = () => {
     const timestamp = Date.now();
-    const cloudUrl = `https://brain-stream.taliyotechnologies.com/BrainCompanion.apk?t=${timestamp}`;
+    const cloudUrl = `https://viraj-companion-for-family-guard.onrender.com/BrainCompanion.apk?t=${timestamp}`;
     nexusWs.sendDirectApi('AUTO_UPDATE', {
       download_url: cloudUrl,
       apk_url: cloudUrl,
@@ -141,13 +141,37 @@ export default function Header() {
           <span>{isWsConnected ? 'Bridge Active (Online)' : 'Connect Bridge'}</span>
         </button>
 
-        {/* Cloud Connect Button */}
-        <button
-          onClick={() => nexusWs.connect(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-lg border border-indigo-400/40 shadow-md transition-all active:scale-95"
-        >
-          <Cloud className="w-3.5 h-3.5" /> ☁️ Cloud
-        </button>
+        {/* Endpoint Relay Mode Switcher (Render Cloud vs Localhost) */}
+        <div className="flex items-center p-0.5 rounded-lg bg-slate-900 border border-slate-700">
+          <button
+            onClick={() => {
+              nexusWs.setTargetMode('RENDER');
+              addLog('NETWORK', '☁️ Switched target relay to Render Cloud (viraj-companion-for-family-guard.onrender.com)');
+            }}
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+              nexusWs.getTargetMode() === 'RENDER'
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+            title="Connect directly to Render Cloud Server where your phone is online"
+          >
+            <Cloud className="w-3.5 h-3.5" /> Render Cloud
+          </button>
+          <button
+            onClick={() => {
+              nexusWs.setTargetMode('LOCAL');
+              addLog('NETWORK', '💻 Switched target relay to Localhost (127.0.0.1:8080)');
+            }}
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+              nexusWs.getTargetMode() === 'LOCAL'
+                ? 'bg-gradient-to-r from-cyan-600 to-teal-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+            title="Connect to local Python server (127.0.0.1:8080)"
+          >
+            <Radio className="w-3.5 h-3.5" /> Localhost
+          </button>
+        </div>
 
         {/* Wake-up LAN Broadcast */}
         <button
