@@ -87,8 +87,8 @@ export const useNexusStore = create<NexusState>((set, get) => ({
   latencyMs: 0,
 
   devices: {},
-  selectedDeviceIndex: null,
-  selectedDeviceId: 'ALL',
+  selectedDeviceIndex: 0,
+  selectedDeviceId: 'device-0',
 
   installedApps: {},
   smsThreads: {},
@@ -156,20 +156,14 @@ export const useNexusStore = create<NexusState>((set, get) => ({
         lastSeenMs: Date.now(),
       };
 
-      let newSelected = state.selectedDeviceIndex;
-      let newSelectedId = state.selectedDeviceId;
-      if (newSelected === null) {
-        newSelected = index;
-        newSelectedId = id;
-      }
-
       return {
         devices: {
           ...state.devices,
           [index]: updatedDevice,
         },
-        selectedDeviceIndex: newSelected,
-        selectedDeviceId: newSelectedId,
+        // Strictly preserve current user-selected device index (Never auto-switch)
+        selectedDeviceIndex: state.selectedDeviceIndex !== null ? state.selectedDeviceIndex : 0,
+        selectedDeviceId: state.selectedDeviceId || updatedDevice.id,
       };
     });
   },
@@ -241,8 +235,8 @@ export const useNexusStore = create<NexusState>((set, get) => ({
           ...state.devices,
           [index]: updatedDevice,
         },
-        selectedDeviceIndex: state.selectedDeviceIndex === null ? index : state.selectedDeviceIndex,
-        selectedDeviceId: state.selectedDeviceId === 'ALL' ? updatedDevice.id : state.selectedDeviceId,
+        selectedDeviceIndex: state.selectedDeviceIndex,
+        selectedDeviceId: state.selectedDeviceId,
       };
     });
   },
